@@ -15,6 +15,8 @@ permissions:
 jobs:
   build-windows-exe:
     runs-on: windows-latest
+    env:
+      npm_config_legacy_peer_deps: "true"
 
     steps:
       - name: Checkout repository
@@ -26,10 +28,10 @@ jobs:
           node-version: "22"
 
       - name: Install project dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Electron and Electron Builder
-        run: npm install --no-save electron@33 electron-builder@25
+        run: npm install --no-save --legacy-peer-deps electron@33 electron-builder@25
 
       - name: Rebuild native SQLite module for Electron Windows
         run: npx electron-builder install-app-deps
