@@ -14,9 +14,10 @@ permissions:
 
 jobs:
   build-windows-exe:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       npm_config_legacy_peer_deps: "true"
+      GYP_MSVS_VERSION: "2022"
 
     steps:
       - name: Checkout repository
