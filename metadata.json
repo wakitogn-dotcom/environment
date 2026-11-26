@@ -1,0 +1,6 @@
+{
+  "name": "ReachPulse",
+  "description": "Country-targeted social comment marketing, real Facebook/Instagram/Twitter OAuth automation, unlimited custom comment pools, and live offer lead capture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
