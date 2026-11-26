@@ -2,6 +2,7 @@
   "name": "reachpulse",
   "private": true,
   "version": "1.0.0",
+  "author": "ReachPulse",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
