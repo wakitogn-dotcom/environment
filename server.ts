@@ -29,8 +29,6 @@ import {
   type OfferContext,
 } from './server/comments_ai.ts';
 
-initDatabase();
-
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -1663,31 +1661,32 @@ app.get('/r/:slug', (req, res, next) => {
   next();
 });
 
-// ---------- Automated Background Campaign Scheduler ----------
+// ---------- Automated Background Campaign Scheduler & Server Boot ----------
 
 let schedulerBusy = false;
-setInterval(async () => {
-  if (schedulerBusy) return;
-  schedulerBusy = true;
-  try {
-    const nowIso = new Date().toISOString();
-    const dueCampaigns = db
-      .prepare("SELECT id FROM campaigns WHERE status = 'active' AND (next_run_at IS NULL OR next_run_at <= ?) LIMIT 5")
-      .all(nowIso) as Array<{ id: string }>;
-
-    for (const c of dueCampaigns) {
-      await executeCampaignStep(c.id);
-    }
-  } catch (err) {
-    console.error('Campaign scheduler error:', err);
-  } finally {
-    schedulerBusy = false;
-  }
-}, 15_000);
-
-// ---------- Vite Dev Middleware & Static Production Serving ----------
 
 async function startServer() {
+  await initDatabase();
+
+  setInterval(async () => {
+    if (schedulerBusy) return;
+    schedulerBusy = true;
+    try {
+      const nowIso = new Date().toISOString();
+      const dueCampaigns = db
+        .prepare("SELECT id FROM campaigns WHERE status = 'active' AND (next_run_at IS NULL OR next_run_at <= ?) LIMIT 5")
+        .all(nowIso) as Array<{ id: string }>;
+
+      for (const c of dueCampaigns) {
+        await executeCampaignStep(c.id);
+      }
+    } catch (err) {
+      console.error('Campaign scheduler error:', err);
+    } finally {
+      schedulerBusy = false;
+    }
+  }, 15_000);
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

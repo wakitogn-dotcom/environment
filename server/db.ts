@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import initSqlJs, { type Database as SqlJsDatabase, type SqlValue } from 'sql.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,9 +11,133 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const DB_PATH = path.join(DATA_DIR, 'reachpulse.db');
-export const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+
+let sqlDb: SqlJsDatabase | null = null;
+let inTransaction = false;
+
+function requireSqlDb(): SqlJsDatabase {
+  if (!sqlDb) {
+    throw new Error('Database not initialized yet. Call await initDatabase() before querying.');
+  }
+  return sqlDb;
+}
+
+function persistDatabase(): void {
+  if (!sqlDb) return;
+  const data = sqlDb.export();
+  const tmpPath = `${DB_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, Buffer.from(data));
+  fs.renameSync(tmpPath, DB_PATH);
+}
+
+function normalizeParams(args: unknown[]): SqlValue[] {
+  return args.map((v) => {
+    if (v === undefined) return null;
+    if (v === null || typeof v === 'string' || typeof v === 'number' || v instanceof Uint8Array) {
+      return v;
+    }
+    if (typeof v === 'boolean') return v ? 1 : 0;
+    return String(v);
+  });
+}
+
+export const db = {
+  pragma(statement: string): void {
+    const instance = requireSqlDb();
+    if (/journal_mode/i.test(statement)) return;
+    instance.run(`PRAGMA ${statement}`);
+  },
+
+  exec(sql: string): void {
+    const instance = requireSqlDb();
+    instance.exec(sql);
+    if (!inTransaction) {
+      persistDatabase();
+    }
+  },
+
+  prepare(sql: string) {
+    return {
+      get(...args: unknown[]): unknown {
+        const instance = requireSqlDb();
+        const stmt = instance.prepare(sql);
+        try {
+          const params = normalizeParams(args);
+          if (params.length > 0) stmt.bind(params);
+          if (stmt.step()) {
+            return stmt.getAsObject();
+          }
+          return undefined;
+        } finally {
+          stmt.free();
+        }
+      },
+
+      all(...args: unknown[]): unknown[] {
+        const instance = requireSqlDb();
+        const stmt = instance.prepare(sql);
+        const rows: unknown[] = [];
+        try {
+          const params = normalizeParams(args);
+          if (params.length > 0) stmt.bind(params);
+          while (stmt.step()) {
+            rows.push(stmt.getAsObject());
+          }
+          return rows;
+        } finally {
+          stmt.free();
+        }
+      },
+
+      run(...args: unknown[]): { changes: number } {
+        const instance = requireSqlDb();
+        const stmt = instance.prepare(sql);
+        try {
+          const params = normalizeParams(args);
+          if (params.length > 0) stmt.bind(params);
+          stmt.step();
+          const changes = instance.getRowsModified();
+          if (!inTransaction) {
+            persistDatabase();
+          }
+          return { changes };
+        } finally {
+          stmt.free();
+        }
+      },
+    };
+  },
+
+  transaction<T extends (...args: never[]) => unknown>(fn: T): T {
+    return ((...args: Parameters<T>): ReturnType<T> => {
+      const instance = requireSqlDb();
+      const nested = inTransaction;
+      if (!nested) {
+        instance.run('BEGIN TRANSACTION');
+        inTransaction = true;
+      }
+      try {
+        const result = fn(...args) as ReturnType<T>;
+        if (!nested) {
+          instance.run('COMMIT');
+          inTransaction = false;
+          persistDatabase();
+        }
+        return result;
+      } catch (err) {
+        if (!nested) {
+          try {
+            instance.run('ROLLBACK');
+          } catch {
+            // ignore rollback error
+          }
+          inTransaction = false;
+        }
+        throw err;
+      }
+    }) as T;
+  },
+};
 
 // Persistent server-side encryption key for OAuth tokens stored at rest.
 // Uses process.env.TOKEN_ENCRYPTION_KEY when provided, or a generated key stored in data/.vault.key
@@ -61,7 +185,29 @@ export function decryptSecret(payload: string | null | undefined): string | null
   }
 }
 
-export function initDatabase(): void {
+export async function initDatabase(): Promise<void> {
+  if (!sqlDb) {
+    const wasmCandidates = [
+      typeof __dirname !== 'undefined' ? path.join(__dirname, 'sql-wasm.wasm') : '',
+      path.resolve(process.cwd(), 'dist-server', 'sql-wasm.wasm'),
+      path.resolve(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+    ].filter(Boolean);
+    const wasmPath = wasmCandidates.find((p) => fs.existsSync(p));
+    const wasmBuf = wasmPath ? fs.readFileSync(wasmPath) : undefined;
+    const wasmBinary = wasmBuf
+      ? wasmBuf.buffer.slice(wasmBuf.byteOffset, wasmBuf.byteOffset + wasmBuf.byteLength)
+      : undefined;
+
+    const SQL = await initSqlJs(wasmBinary ? { wasmBinary } : undefined);
+    if (fs.existsSync(DB_PATH)) {
+      const existingBuf = fs.readFileSync(DB_PATH);
+      sqlDb = new SQL.Database(existingBuf);
+    } else {
+      sqlDb = new SQL.Database();
+    }
+    sqlDb.run('PRAGMA foreign_keys = ON');
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS social_accounts (
       id TEXT PRIMARY KEY,

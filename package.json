@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
+    "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --outfile=dist-server/server.cjs --external:vite && node -e \"require('fs').copyFileSync('node_modules/sql.js/dist/sql-wasm.wasm', 'dist-server/sql-wasm.wasm')\"",
     "build:desktop": "npm run build && npm run build:server",
     "dist:win": "npm run build:desktop && electron-builder --win --config electron-builder.yml",
     "start": "NODE_ENV=production node server.ts",
@@ -18,15 +18,15 @@
   "dependencies": {
     "@google/genai": "^3.6.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/better-sqlite3": "^9.6.0",
+    "@types/sql.js": "^1.16.1",
     "@vitejs/plugin-react": "^6.1.1",
-    "better-sqlite3": "^13.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "sql.js": "^1.17.0",
     "vite": "^8.3.0"
   },
   "devDependencies": {
