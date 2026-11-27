@@ -37,7 +37,7 @@ jobs:
         run: npm run build:desktop
 
       - name: Package Windows Installer & Portable EXE
-        run: npx electron-builder --win --config electron-builder.yml
+        run: npx electron-builder --win --config electron-builder.yml --publish never
 
       - name: Upload Windows EXE artifacts
         uses: actions/upload-artifact@v4

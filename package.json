@@ -10,7 +10,7 @@
     "build": "vite build",
     "build:server": "esbuild server.ts --bundle --platform=node --format=cjs --outfile=dist-server/server.cjs --external:vite && node -e \"require('fs').copyFileSync('node_modules/sql.js/dist/sql-wasm.wasm', 'dist-server/sql-wasm.wasm')\"",
     "build:desktop": "npm run build && npm run build:server",
-    "dist:win": "npm run build:desktop && electron-builder --win --config electron-builder.yml",
+    "dist:win": "npm run build:desktop && electron-builder --win --config electron-builder.yml --publish never",
     "start": "NODE_ENV=production node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-server release server.js",

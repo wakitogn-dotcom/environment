@@ -9,6 +9,7 @@ files:
   - electron/**/*
   - package.json
 asar: true
+publish: null
 win:
   target:
     - target: nsis
